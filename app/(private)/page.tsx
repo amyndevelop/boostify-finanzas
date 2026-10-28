@@ -1,4 +1,10 @@
 import Link from 'next/link';
+import { DeepInsights } from '@/components/deep-insights';
+import {
+  comparisonBounds,
+  deepStatistics,
+  sameMonthHeight,
+} from '@/lib/deep-statistics';
 import { AdvancedInsights } from '@/components/advanced-insights';
 import { insights, coverageStart, nextDay } from '@/lib/insights';
 import { TodaySummary } from '@/components/today-summary';
@@ -61,6 +67,27 @@ export default async function Dashboard({
     .toISOString()
     .slice(0, 10);
   const previousDates = previousRange(p.period, selected.dates);
+  let compareDates;
+  try {
+    compareDates = comparisonBounds(
+      p.compareStart,
+      p.compareEnd,
+      previousDates,
+    );
+  } catch {
+    return (
+      <section className="card">
+        <h1>Revisá las fechas de comparación</h1>
+        <p className="muted my-4">
+          Elegí un inicio anterior al fin y un rango de hasta dos años.
+        </p>
+        <Link className="button" href="/">
+          Volver al panel
+        </Link>
+      </section>
+    );
+  }
+
   const [rows, monthly, previousRows, goalResult, syncState] =
     await Promise.all([
       db.transaction.findMany({
@@ -92,18 +119,25 @@ export default async function Dashboard({
         .then((state) => ({ available: true, state }))
         .catch(() => ({ available: false, state: null })),
     ]);
-  const insightStart =
-    nextDay(selected.dates.a, -29) < monthStart
-      ? nextDay(selected.dates.a, -29)
-      : monthStart;
+  const heightBounds = sameMonthHeight(now);
+  const todayEnd = range('today', undefined, undefined, now).end;
+  const insightWindows = [
+    { a: nextDay(selected.dates.a, -29), b: selected.dates.b },
+    compareDates,
+    { a: monthStart, b: today },
+    ...(heightBounds ? [heightBounds.previous] : []),
+  ].map((window) => {
+    const end = fromZonedTime(nextDay(window.b) + 'T00:00:00', TZ);
+    return {
+      occurredAt: {
+        gte: fromZonedTime(window.a + 'T00:00:00', TZ),
+        lt: end < todayEnd ? end : todayEnd,
+      },
+    };
+  });
   const [insightRows, firstRecorded] = await Promise.all([
     db.transaction.findMany({
-      where: {
-        occurredAt: {
-          gte: fromZonedTime(insightStart + 'T00:00:00', TZ),
-          lt: range('month', undefined, undefined, now).end,
-        },
-      },
+      where: { OR: insightWindows },
       select: { type: true, amountCents: true, occurredAt: true },
     }),
     db.transaction.aggregate({ _min: { occurredAt: true } }),
@@ -116,6 +150,13 @@ export default async function Dashboard({
       process.env.BELO_IMPORT_START_AT,
       firstRecorded._min.occurredAt,
     ),
+    now,
+  );
+  const deepData = deepStatistics(
+    insightRows,
+    selected.dates,
+    compareDates,
+    insightData.coverage,
     now,
   );
   const mailStatus = syncState.available
@@ -476,6 +517,7 @@ export default async function Dashboard({
         )}
       </section>
       <AdvancedInsights data={insightData} />
+      <DeepInsights data={deepData} params={p} />
       <section className="stats-grid">
         <article className="card">
           <div className="section-heading">
