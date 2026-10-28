@@ -3,6 +3,11 @@ import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { parseBeloDeposit, verifyBeloSignature } from '../lib/belo';
+function strictWebSafeDecode(value: string) {
+  if (value.length % 4 !== 0 || !/^[A-Za-z0-9_-]*={0,2}$/.test(value))
+    throw new Error('No se ha podido descodificar la cadena');
+  return Buffer.from(value, 'base64url');
+}
 const start = new Date('2026-10-28T12:00:00Z');
 const now = new Date('2026-10-28T14:00:00Z');
 const sample = {
@@ -173,6 +178,7 @@ describe('agente Gmail de solo lectura', () => {
     code: number,
     auth = 'mx.google.com; dmarc=pass header.from=belo.app;',
     text = sample.text,
+    encoded?: string,
   ) {
     const store: Record<string, string> = {
       BOOSTIFY_URL: 'https://boostify.test',
@@ -204,7 +210,9 @@ describe('agente Gmail de solo lectura', () => {
               internalDate: String(Date.parse(sample.receivedAt)),
               payload: {
                 mimeType: 'text/plain',
-                body: { data: Buffer.from(text).toString('base64url') },
+                body: {
+                  data: encoded ?? Buffer.from(text).toString('base64url'),
+                },
                 headers: [
                   { name: 'From', value: 'belo <transaction@belo.app>' },
                   { name: 'Subject', value: sample.subject },
@@ -218,7 +226,7 @@ describe('agente Gmail de solo lectura', () => {
       },
       Utilities: {
         Charset: { UTF_8: 'UTF-8' },
-        base64DecodeWebSafe: (s: string) => Buffer.from(s, 'base64url'),
+        base64DecodeWebSafe: strictWebSafeDecode,
         newBlob: (b: Buffer) => ({ getDataAsString: () => b.toString() }),
         computeHmacSha256Signature: (message: string, key: string) => [
           ...createHmac('sha256', key).update(message).digest(),
@@ -238,6 +246,13 @@ describe('agente Gmail de solo lectura', () => {
       sync: () => vm.runInContext('syncBelo()', context),
     };
   }
+  it('manda a revisión un cuerpo dañado sin bloquear el recorrido', () => {
+    const r = run(201, undefined, undefined, '%%%');
+    expect(r.sync).not.toThrow();
+    expect(r.posted).toHaveLength(0);
+    expect(r.store.BELO_REVIEW).toContain(sample.gmailMessageId);
+    expect(r.store.BELO_CURSOR).toBeDefined();
+  });
   it('publica solo depósitos autenticados y avanza cursor al completarse', () => {
     const r = run(201);
     r.sync();
@@ -276,7 +291,7 @@ describe('correo HTML de Belo', () => {
   it('convierte HTML y entidades sin ejecutar scripts ni incluir adjuntos', () => {
     const context = vm.createContext({
       Utilities: {
-        base64DecodeWebSafe: (v: string) => Buffer.from(v, 'base64url'),
+        base64DecodeWebSafe: strictWebSafeDecode,
         newBlob: (v: Buffer) => ({ getDataAsString: () => v.toString() }),
       },
     });
@@ -299,4 +314,45 @@ describe('correo HTML de Belo', () => {
     );
     expect(text).not.toContain('throw');
   });
+});
+
+describe('base64 de Gmail y Apps Script', () => {
+  function context() {
+    const ctx = vm.createContext({
+      Utilities: {
+        base64DecodeWebSafe: strictWebSafeDecode,
+        newBlob: (b: Buffer) => ({ getDataAsString: () => b.toString('utf8') }),
+      },
+    });
+    vm.runInContext(
+      readFileSync(
+        new URL('../integrations/belo-gmail/Code.gs', import.meta.url),
+        'utf8',
+      ),
+      ctx,
+    );
+    return ctx;
+  }
+  it.each(['a', 'ab', 'abc', 'Depósito recibido de $990 💰'])(
+    'normaliza padding ausente y conserva UTF-8: %s',
+    (text) => {
+      const ctx = context();
+      ctx.encoded = Buffer.from(text).toString('base64url');
+      expect(vm.runInContext('decodeBody_(encoded)', ctx)).toBe(text);
+    },
+  );
+  it('también admite base64 estándar, espacios y padding existente', () => {
+    const ctx = context();
+    const text = 'Depósito 💰';
+    ctx.encoded = Buffer.from(text).toString('base64') + '\n';
+    expect(vm.runInContext('decodeBody_(encoded)', ctx)).toBe(text);
+  });
+  it.each(['a', 'abc%', 'ab=c', '%%%'])(
+    'rechaza codificación inválida: %s',
+    (encoded) => {
+      const ctx = context();
+      ctx.encoded = encoded;
+      expect(() => vm.runInContext('decodeBody_(encoded)', ctx)).toThrow();
+    },
+  );
 });

@@ -40,8 +40,11 @@ function syncBelo() {
       const from = header('From').trim();
       if (!/^(?:[^<>]*<)?transaction@belo\.app>?$/i.test(from)) { ignored++; return; }
       const subject = header('Subject');
-      const text = plainText_(m.payload);
-      if (!/^Aviso de operaci[oó]n\s*[-–]/i.test(subject) || !/Dep[oó]sito exitoso/i.test(text)) { ignored++; return; }
+      if (!/^Aviso de operaci[oó]n\s*[-–]/i.test(subject)) { ignored++; return; }
+      let text;
+      try { text = plainText_(m.payload); }
+      catch (error) { failure_(s.p, item.id, 'No se pudo decodificar el cuerpo del correo'); review++; return; }
+      if (!/Dep[oó]sito exitoso/i.test(text)) { ignored++; return; }
       // Google's result, not the display name or a forwarded From line.
       const auth = header('Authentication-Results');
       const authenticated = /^mx\.google\.com;/i.test(auth) && /\bdmarc=pass\b[^;]*\bheader\.from=belo\.app(?=\s|;|$)/i.test(auth);
@@ -73,8 +76,18 @@ function plainText_(part) {
 }
 function mimeParts_(part, mime) {
   if (part.mimeType === 'message/rfc822') return [];
-  if (part.mimeType === mime && part.body && part.body.data) return [Utilities.newBlob(Utilities.base64DecodeWebSafe(part.body.data)).getDataAsString('UTF-8')];
+  if (part.mimeType === mime && part.body && part.body.data) return [decodeBody_(part.body.data)];
   return (part.parts || []).reduce(function(result, child) { return result.concat(mimeParts_(child, mime)); }, []);
+}
+// Gmail may omit base64 padding; Apps Script's decoder is stricter than Node's.
+function decodeBody_(value) {
+  if (typeof value !== 'string') throw new Error('Cuerpo de correo no válido');
+  const normalized = value.replace(/\s/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+  if (!/^[A-Za-z0-9_-]*={0,2}$/.test(normalized)) throw new Error('Base64 no válido');
+  const data = normalized.replace(/=+$/, '');
+  if (data.length % 4 === 1) throw new Error('Base64 incompleto');
+  const padded = data + '='.repeat((4 - data.length % 4) % 4);
+  return Utilities.newBlob(Utilities.base64DecodeWebSafe(padded)).getDataAsString('UTF-8');
 }
 function failure_(properties, id, reason) {
   const list = JSON.parse(properties.getProperty('BELO_REVIEW') || '[]');
