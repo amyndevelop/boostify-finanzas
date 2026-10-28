@@ -97,3 +97,38 @@ function failure_(properties, id, reason) {
 function showBeloReview() {
   console.log(PropertiesService.getScriptProperties().getProperty('BELO_REVIEW') || '[]');
 }
+// Read-only diagnosis: reports format and success flags, never email contents or secrets.
+function diagnoseBelo() {
+  const s = settings_();
+  const pending = JSON.parse(s.p.getProperty('BELO_REVIEW') || '[]').slice(-3);
+  if (!pending.length) { console.log('No hay correos pendientes para diagnosticar.'); return; }
+  pending.forEach(function(entry) {
+    const message = Gmail.Users.Messages.get('me', entry.id, { format: 'full' });
+    const report = [];
+    function visit(part) {
+      if (part.mimeType === 'text/plain' || part.mimeType === 'text/html') {
+        const value = part.body && part.body.data;
+        const row = { mime: part.mimeType, type: typeof value, array: Array.isArray(value), length: typeof value === 'string' ? value.length : null };
+        if (typeof value === 'string') {
+          const compact = value.replace(/\s/g, '');
+          row.base64Alphabet = /^[A-Za-z0-9_+\/-]*={0,2}$/.test(compact);
+          row.remainder = compact.replace(/=+$/, '').length % 4;
+          row.alreadyText = /Tu cuenta de belo|Dep[oó]sito exitoso/i.test(value);
+          const data = compact.replace(/=+$/, '');
+          const padded = data + '='.repeat((4 - data.length % 4) % 4);
+          function attempt(fn) {
+            try { const bytes = fn(); const text = Utilities.newBlob(bytes).getDataAsString('UTF-8'); return { decoded: true, depositTemplate: /Tu cuenta de belo|Dep[oó]sito exitoso/i.test(text) }; }
+            catch (error) { return { decoded: false }; }
+          }
+          row.webSafePadded = attempt(function() { return Utilities.base64DecodeWebSafe(padded.replace(/\+/g, '-').replace(/\//g, '_')); });
+          row.webSafeUnpadded = attempt(function() { return Utilities.base64DecodeWebSafe(data.replace(/\+/g, '-').replace(/\//g, '_')); });
+          row.standardPadded = attempt(function() { return Utilities.base64Decode(padded.replace(/-/g, '+').replace(/_/g, '/')); });
+        }
+        report.push(row);
+      }
+      (part.parts || []).forEach(visit);
+    }
+    visit(message.payload);
+    console.log(JSON.stringify({ bodyFormats: report }));
+  });
+}

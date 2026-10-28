@@ -356,3 +356,51 @@ describe('base64 de Gmail y Apps Script', () => {
     },
   );
 });
+it('el diagnóstico informa formatos sin revelar cuerpo ni claves ni enviar datos', () => {
+  const logs: string[] = [];
+  const secret = 'private-value-never-log-this';
+  const ctx = vm.createContext({
+    console: { log: (v: string) => logs.push(v) },
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (key: string) =>
+          ({
+            BOOSTIFY_URL: 'https://boostify.test',
+            BELO_WEBHOOK_SECRET: secret.repeat(2),
+            BELO_IMPORT_START_AT: start.toISOString(),
+            BELO_IMPORT_CURRENCY: 'ARS',
+            BELO_REVIEW: JSON.stringify([{ id: 'private-mail-id' }]),
+          })[key],
+      }),
+    },
+    Gmail: {
+      Users: {
+        Messages: {
+          get: () => ({
+            payload: {
+              mimeType: 'text/plain',
+              body: { data: Buffer.from(sample.text).toString('base64url') },
+            },
+          }),
+        },
+      },
+    },
+    Utilities: {
+      base64DecodeWebSafe: strictWebSafeDecode,
+      base64Decode: (s: string) => Buffer.from(s, 'base64'),
+      newBlob: (v: Buffer) => ({ getDataAsString: () => v.toString() }),
+    },
+  });
+  vm.runInContext(
+    readFileSync(
+      new URL('../integrations/belo-gmail/Code.gs', import.meta.url),
+      'utf8',
+    ),
+    ctx,
+  );
+  vm.runInContext('diagnoseBelo()', ctx);
+  const report = JSON.parse(logs[0]);
+  expect(report.bodyFormats[0].webSafePadded.depositTemplate).toBe(true);
+  for (const privateValue of [secret, sample.text, 'private-mail-id', '$990'])
+    expect(logs.join('')).not.toContain(privateValue);
+});
