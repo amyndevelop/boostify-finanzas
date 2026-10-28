@@ -18,10 +18,19 @@ model Transaction {
  occurredAt DateTime @db.Timestamptz(3)
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ beloImport BeloImport?
  @@index([occurredAt, type])
 }
 model LoginAttempt {
  id String @id
  count Int @default(0)
  blockedUntil DateTime @db.Timestamptz(3)
+}
+
+model BeloImport {
+ id String @id
+ gmailMessageId String @unique
+ transactionId String? @unique
+ transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+ importedAt DateTime @default(now()) @db.Timestamptz(3)
 }

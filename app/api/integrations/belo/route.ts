@@ -1,0 +1,92 @@
+import { NextRequest } from 'next/server';
+import { Prisma } from '@prisma/client';
+import { db } from '@/lib/db';
+import { parseBeloDeposit, verifyBeloSignature } from '@/lib/belo';
+export const runtime = 'nodejs';
+export async function POST(request: NextRequest) {
+  const start = process.env.BELO_IMPORT_START_AT;
+  const secret = process.env.BELO_WEBHOOK_SECRET;
+  const startAt = start ? new Date(start) : null;
+  if (
+    process.env.BELO_IMPORT_ENABLED !== 'true' ||
+    process.env.BELO_IMPORT_CURRENCY !== 'ARS' ||
+    !startAt ||
+    isNaN(+startAt) ||
+    !secret ||
+    secret.length < 32
+  )
+    return Response.json(
+      { error: 'Integración desactivada o incompleta' },
+      { status: 503 },
+    );
+  if (Number(request.headers.get('content-length')) > 30000)
+    return Response.json(
+      { error: 'Mensaje demasiado grande' },
+      { status: 413 },
+    );
+  const reader = request.body?.getReader();
+  if (!reader)
+    return Response.json({ error: 'Falta el mensaje' }, { status: 400 });
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    size += chunk.value.byteLength;
+    if (size > 30000) {
+      await reader.cancel();
+      return Response.json(
+        { error: 'Mensaje demasiado grande' },
+        { status: 413 },
+      );
+    }
+    chunks.push(chunk.value);
+  }
+  const body = Buffer.concat(chunks).toString('utf8');
+  if (
+    !verifyBeloSignature(
+      body,
+      request.headers.get('x-belo-timestamp'),
+      request.headers.get('x-belo-signature'),
+      secret,
+    )
+  )
+    return Response.json({ error: 'Firma inválida' }, { status: 401 });
+  let deposit: ReturnType<typeof parseBeloDeposit>;
+  try {
+    deposit = parseBeloDeposit(JSON.parse(body), startAt);
+  } catch {
+    return Response.json(
+      { error: 'Aviso no reconocido; revisar manualmente' },
+      { status: 422 },
+    );
+  }
+  try {
+    await db.beloImport.create({
+      data: {
+        id: deposit.importId,
+        gmailMessageId: deposit.gmailMessageId,
+        transaction: {
+          create: {
+            type: 'INCOME',
+            amountCents: deposit.amountCents,
+            category: 'Otros',
+            description: 'Cobro Belo · importado desde Gmail',
+            occurredAt: deposit.occurredAt,
+          },
+        },
+      },
+    });
+    return Response.json({ status: 'created' }, { status: 201 });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    )
+      return Response.json({ status: 'duplicate' });
+    return Response.json(
+      { error: 'No se pudo importar; reintentar' },
+      { status: 503 },
+    );
+  }
+}

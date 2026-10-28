@@ -14,7 +14,8 @@
     "db:migrate": "prisma migrate deploy",
     "admin:hash": "tsx scripts/hash-password.ts",
     "format": "prettier --write .",
-    "test:integration": "tsx scripts/integration.ts"
+    "test:integration": "tsx scripts/integration.ts",
+    "test:belo-integration": "tsx scripts/belo-integration.ts"
   },
   "repository": {
     "type": "git",

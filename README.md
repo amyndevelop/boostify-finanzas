@@ -67,3 +67,7 @@ El repositorio está preparado para Vercel; crear código o pasar un build no im
 ## Red del entorno de nube
 
 La instalación requiere `registry.npmjs.org` y `binaries.prisma.sh` (motor de migraciones y sus checksums oficiales). Conservá TLS y verificación de checksum. Si el proxy devuelve 403 para ese dominio, habilitalo en ajustes del entorno, guardá y reintentá. El runtime Prisma usa el adaptador oficial `pg` sin motor Rust.
+
+## Automatización de cobros Belo (opcional)
+
+El receptor firmado y el agente Gmail están en [integrations/belo-gmail](integrations/belo-gmail/README.md). La integración está desactivada por defecto y requiere la migración adicional, configuración en Vercel, y autorización del titular en Google Apps Script. Importa depósitos ARS desde la activación, categoría Otros, con prevención de duplicados. El código y las pruebas locales no establecen una conexión real a la cuenta de Gmail: la primera recepción de producción debe verificarse al activarla.
