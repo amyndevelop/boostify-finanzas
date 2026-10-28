@@ -3,7 +3,7 @@ import { stdin, stdout } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 if (!stdin.isTTY)
   throw new Error('Ejecutá este comando en una terminal interactiva.');
-const rl = createInterface({ input: stdin, output: stdout });
+const rl = createInterface({ input: stdin, output: stdout, terminal: false });
 // Disable terminal echo while entering the password.
 const { execFileSync } = await import('node:child_process');
 try {
