@@ -1,0 +1,27 @@
+generator client {
+ provider = "prisma-client-js"
+ engineType = "client"
+}
+datasource db {
+ provider = "postgresql"
+}
+enum TransactionType {
+ INCOME
+ EXPENSE
+}
+model Transaction {
+ id String @id @default(cuid())
+ type TransactionType
+ amountCents Int
+ category String
+ description String?
+ occurredAt DateTime @db.Timestamptz(3)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+ @@index([occurredAt, type])
+}
+model LoginAttempt {
+ id String @id
+ count Int @default(0)
+ blockedUntil DateTime @db.Timestamptz(3)
+}

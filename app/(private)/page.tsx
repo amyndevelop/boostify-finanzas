@@ -1,0 +1,409 @@
+import Link from 'next/link';
+import { db } from '@/lib/db';
+import { day, money, totals, range } from '@/lib/finance';
+import { filters, Params } from '@/lib/query';
+import { MovementDialog, DeleteDialog } from '@/components/movement-dialog';
+import { Evolution, MonthlyChart } from '@/components/charts';
+import { Filters } from '@/components/filters';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Download,
+  Wallet,
+  TrendingUp,
+  Percent,
+  ArrowLeftRight,
+} from 'lucide-react';
+import { addDays, subMonths } from 'date-fns';
+import { fromZonedTime } from 'date-fns-tz';
+import { TZ } from '@/lib/finance';
+export default async function Dashboard({
+  searchParams,
+}: {
+  searchParams: Promise<Params>;
+}) {
+  const p = await searchParams;
+  let selected: ReturnType<typeof filters>;
+  try {
+    selected = filters(p);
+  } catch {
+    return (
+      <section className="card">
+        <h1>Revisá las fechas del filtro</h1>
+        <p className="muted my-4">
+          Elegí fechas válidas y un rango de hasta dos años.
+        </p>
+        <Link className="button" href="/">
+          Volver al mes actual
+        </Link>
+      </section>
+    );
+  }
+  const today = day(new Date());
+  const monthStart = today.slice(0, 7) + '-01';
+  const sixMonths = subMonths(new Date(monthStart + 'T12:00:00Z'), 5)
+    .toISOString()
+    .slice(0, 10);
+  const [rows, monthly] = await Promise.all([
+    db.transaction.findMany({
+      where: selected.where,
+      orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+    }),
+    db.transaction.findMany({
+      where: {
+        occurredAt: {
+          gte: fromZonedTime(sixMonths + 'T00:00:00', TZ),
+          lt: range('month').end,
+        },
+      },
+      select: { type: true, amountCents: true, occurredAt: true },
+    }),
+  ]);
+  const summary = totals(rows);
+  const daily = new Map<
+    string,
+    { date: string; income: number; expense: number; profit: number }
+  >();
+  for (
+    let d = new Date(selected.dates.a + 'T12:00:00Z');
+    d.toISOString().slice(0, 10) <= selected.dates.b;
+    d = addDays(d, 1)
+  ) {
+    const date = d.toISOString().slice(0, 10);
+    daily.set(date, { date, income: 0, expense: 0, profit: 0 });
+  }
+  for (const r of rows) {
+    const d = daily.get(day(r.occurredAt));
+    if (d) {
+      if (r.type === 'INCOME') d.income += r.amountCents;
+      else d.expense += r.amountCents;
+      d.profit = d.income - d.expense;
+    }
+  }
+  const monthlyData = Array.from({ length: 6 }, (_, i) => {
+    const m = subMonths(new Date(monthStart + 'T12:00:00Z'), 5 - i)
+      .toISOString()
+      .slice(0, 7);
+    return {
+      month: m,
+      ...totals(monthly.filter((r) => day(r.occurredAt).startsWith(m))),
+    };
+  });
+  const expenses = Object.entries(
+    rows
+      .filter((r) => r.type === 'EXPENSE')
+      .reduce(
+        (a, r) => {
+          a[r.category] = (a[r.category] ?? 0) + r.amountCents;
+          return a;
+        },
+        {} as Record<string, number>,
+      ),
+  ).sort((a, b) => b[1] - a[1]);
+  const exportParams = new URLSearchParams(
+    Object.entries(p).filter(
+      (v): v is [string, string] => typeof v[1] === 'string',
+    ),
+  ).toString();
+  const page = Math.max(
+    1,
+    Math.min(Math.ceil(rows.length / 20) || 1, Math.floor(Number(p.page)) || 1),
+  );
+  return (
+    <>
+      <section id="overview" className="page-heading">
+        <div>
+          <p className="eyebrow">EL PULSO DE TU NEGOCIO</p>
+          <h1>
+            Todo en <span>control.</span>
+          </h1>
+          <p className="muted">
+            Tus números claros. Tus próximas decisiones, más simples.
+          </p>
+        </div>
+        <MovementDialog today={today} />
+      </section>
+      <div className="period-bar">
+        <div>
+          <span className="live-dot" />{' '}
+          {selected.dates.a.split('-').reverse().join('/')} —{' '}
+          {selected.dates.b.split('-').reverse().join('/')}
+        </div>
+        <span className="muted text-xs">ARS · Hora de Argentina</span>
+      </div>
+      <Filters params={p} />
+      <section className="metrics" aria-label="Resumen financiero">
+        {[
+          {
+            title: 'Ingresos cobrados',
+            value: money(summary.income),
+            note: 'Dinero que entró al negocio',
+            icon: ArrowDownLeft,
+            color: 'green',
+          },
+          {
+            title: 'Gastos del período',
+            value: money(summary.expense),
+            note: 'Tu inversión en movimiento',
+            icon: ArrowUpRight,
+            color: 'red',
+          },
+          {
+            title: 'Ganancia neta',
+            value: money(summary.profit),
+            note: 'Lo que realmente queda',
+            icon: Wallet,
+            color: 'purple',
+          },
+          {
+            title: 'Margen de ganancia',
+            value:
+              summary.margin.toLocaleString('es-AR', {
+                maximumFractionDigits: 1,
+              }) + '%',
+            note: summary.income
+              ? 'Ganancia sobre ingresos'
+              : 'Sin ingresos en este período',
+            icon: Percent,
+            color: 'neutral',
+          },
+        ].map((m) => (
+          <article key={m.title} className={'metric ' + m.color}>
+            <div className="metric-label">
+              {m.title}
+              <span className="metric-icon">
+                <m.icon size={19} />
+              </span>
+            </div>
+            <strong>{m.value}</strong>
+            <p>{m.note}</p>
+          </article>
+        ))}
+      </section>
+      <section className="card evolution">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">DÍA A DÍA</p>
+            <h2>Así se mueve BOOSTIFY</h2>
+          </div>
+          <span className="badge">
+            <TrendingUp size={14} /> Evolución del período
+          </span>
+        </div>
+        {rows.length ? (
+          <Evolution data={[...daily.values()]} />
+        ) : (
+          <div className="empty">
+            <TrendingUp size={32} />
+            <h3>Todo empieza con el primer movimiento.</h3>
+            <p>
+              Registrá un ingreso o gasto para ver la evolución de tu negocio.
+            </p>
+            <MovementDialog today={today} />
+          </div>
+        )}
+      </section>
+      <section id="movements" className="card">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">CADA MOVIMIENTO CUENTA</p>
+            <h2>
+              Tu historial <span className="count">{rows.length}</span>
+            </h2>
+          </div>
+          <Link className="button" href={'/api/export?' + exportParams}>
+            <Download size={16} /> Exportar CSV
+          </Link>
+        </div>
+        {rows.length ? (
+          <>
+            <div className="table-scroll">
+              <table>
+                <caption className="sr-only">
+                  Movimientos del período seleccionado
+                </caption>
+                <thead>
+                  <tr>
+                    <th>Movimiento</th>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th className="text-right">Importe</th>
+                    <th>
+                      <span className="sr-only">Acciones</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice((page - 1) * 20, page * 20).map((r) => (
+                    <tr key={r.id}>
+                      <td>
+                        <div className="transaction-name">
+                          <span
+                            className={
+                              'transaction-icon ' +
+                              (r.type === 'INCOME' ? 'green' : 'red')
+                            }
+                          >
+                            {r.type === 'INCOME' ? (
+                              <ArrowDownLeft size={19} />
+                            ) : (
+                              <ArrowUpRight size={19} />
+                            )}
+                          </span>
+                          <span>
+                            <strong>{r.category}</strong>
+                            <small>{r.description || 'Sin descripción'}</small>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="nowrap muted">
+                        {day(r.occurredAt).split('-').reverse().join('/')}
+                      </td>
+                      <td>
+                        <span
+                          className={
+                            'type-badge ' +
+                            (r.type === 'INCOME' ? 'green' : 'red')
+                          }
+                        >
+                          {r.type === 'INCOME' ? 'Ingreso' : 'Gasto'}
+                        </span>
+                      </td>
+                      <td
+                        className={
+                          'amount ' + (r.type === 'INCOME' ? 'green' : 'red')
+                        }
+                      >
+                        {r.type === 'INCOME' ? '+' : '−'}
+                        {money(r.amountCents)}
+                      </td>
+                      <td>
+                        <div className="flex">
+                          <MovementDialog
+                            movement={{ ...r, date: day(r.occurredAt) }}
+                            today={today}
+                          />
+                          <DeleteDialog id={r.id} />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="pagination">
+              <span>
+                Página {page} de {Math.ceil(rows.length / 20)}
+              </span>
+              <div className="flex gap-3">
+                {page > 1 && (
+                  <Link
+                    className="button"
+                    href={
+                      '/?' +
+                      new URLSearchParams({
+                        ...Object.fromEntries(
+                          new URLSearchParams(exportParams),
+                        ),
+                        page: String(page - 1),
+                      }) +
+                      '#movements'
+                    }
+                  >
+                    Anterior
+                  </Link>
+                )}
+                {page * 20 < rows.length && (
+                  <Link
+                    className="button"
+                    href={
+                      '/?' +
+                      new URLSearchParams({
+                        ...Object.fromEntries(
+                          new URLSearchParams(exportParams),
+                        ),
+                        page: String(page + 1),
+                      }) +
+                      '#movements'
+                    }
+                  >
+                    Siguiente
+                  </Link>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="empty compact">
+            <ArrowLeftRight size={28} />
+            <h3>No hay movimientos en este período.</h3>
+            <p>Probá otro filtro o registrá un nuevo movimiento.</p>
+          </div>
+        )}
+      </section>
+      <section id="statistics" className="stats-grid">
+        <article className="card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">UNA MIRADA MÁS AMPLIA</p>
+              <h2>Últimos seis meses</h2>
+            </div>
+          </div>
+          <MonthlyChart data={monthlyData} />
+          <div className="monthly-summary">
+            {monthlyData.map((m) => (
+              <div key={m.month}>
+                <span>{m.month}</span>
+                <strong className={m.profit >= 0 ? 'green' : 'red'}>
+                  {money(m.profit)}
+                </strong>
+                <small>ganancia neta</small>
+              </div>
+            ))}
+          </div>
+        </article>
+        <article className="card">
+          <p className="eyebrow">DÓNDE INVERTÍS</p>
+          <h2 className="mt-2 mb-7">Gastos por categoría</h2>
+          {expenses.length ? (
+            <div className="category-list">
+              {expenses.map(([name, value], i) => (
+                <div key={name}>
+                  <div className="flex justify-between gap-3 mb-2">
+                    <span>{name}</span>
+                    <strong>{money(value)}</strong>
+                  </div>
+                  <div className="progress">
+                    <span
+                      style={{
+                        width: `${(value / summary.expense) * 100}%`,
+                        background: [
+                          '#8b5cf6',
+                          '#ac87ff',
+                          '#d0b7ff',
+                          '#6250a8',
+                          '#494062',
+                        ][i % 5],
+                      }}
+                    />
+                  </div>
+                  <p className="muted text-xs mt-1">
+                    {((value / summary.expense) * 100).toFixed(1)}% del gasto
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty compact">
+              <p>Sin gastos para los filtros seleccionados.</p>
+            </div>
+          )}
+          <p className="muted text-xs mt-7">
+            Los totales y categorías respetan tus filtros. La comparación
+            mensual muestra todos los movimientos.
+          </p>
+        </article>
+      </section>
+    </>
+  );
+}
