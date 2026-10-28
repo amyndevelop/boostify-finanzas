@@ -178,7 +178,7 @@ describe('agente Gmail de solo lectura', () => {
     code: number,
     auth = 'mx.google.com; dmarc=pass header.from=belo.app;',
     text = sample.text,
-    encoded?: string,
+    encoded?: string | number[],
   ) {
     const store: Record<string, string> = {
       BOOSTIFY_URL: 'https://boostify.test',
@@ -227,7 +227,9 @@ describe('agente Gmail de solo lectura', () => {
       Utilities: {
         Charset: { UTF_8: 'UTF-8' },
         base64DecodeWebSafe: strictWebSafeDecode,
-        newBlob: (b: Buffer) => ({ getDataAsString: () => b.toString() }),
+        newBlob: (b: Buffer | number[]) => ({
+          getDataAsString: () => Buffer.from(b).toString(),
+        }),
         computeHmacSha256Signature: (message: string, key: string) => [
           ...createHmac('sha256', key).update(message).digest(),
         ],
@@ -252,6 +254,31 @@ describe('agente Gmail de solo lectura', () => {
     expect(r.posted).toHaveLength(0);
     expect(r.store.BELO_REVIEW).toContain(sample.gmailMessageId);
     expect(r.store.BELO_CURSOR).toBeDefined();
+  });
+  it('importa bytes del servicio avanzado y retira el aviso de revisión al resolverlo', () => {
+    const bytes = [...Buffer.from(sample.text)].map((b) =>
+      b > 127 ? b - 256 : b,
+    );
+    const r = run(201, undefined, undefined, bytes);
+    r.store.BELO_REVIEW = JSON.stringify([
+      {
+        id: sample.gmailMessageId,
+        reason: 'No se pudo decodificar el cuerpo del correo',
+      },
+    ]);
+    r.sync();
+    expect(r.posted).toHaveLength(1);
+    expect(JSON.parse(r.posted[0]).text).toBe(sample.text);
+    expect(JSON.parse(r.store.BELO_REVIEW)).toEqual([]);
+  });
+  it('actualiza el motivo de un aviso pendiente si cambia el error', () => {
+    const r = run(422);
+    r.store.BELO_REVIEW = JSON.stringify([
+      { id: sample.gmailMessageId, reason: 'Error antiguo' },
+    ]);
+    r.sync();
+    expect(r.store.BELO_REVIEW).not.toContain('Error antiguo');
+    expect(r.store.BELO_REVIEW).toContain('Aviso rechazado');
   });
   it('publica solo depósitos autenticados y avanza cursor al completarse', () => {
     const r = run(201);
@@ -321,7 +348,9 @@ describe('base64 de Gmail y Apps Script', () => {
     const ctx = vm.createContext({
       Utilities: {
         base64DecodeWebSafe: strictWebSafeDecode,
-        newBlob: (b: Buffer) => ({ getDataAsString: () => b.toString('utf8') }),
+        newBlob: (b: Buffer | number[]) => ({
+          getDataAsString: () => Buffer.from(b).toString('utf8'),
+        }),
       },
     });
     vm.runInContext(
@@ -347,6 +376,32 @@ describe('base64 de Gmail y Apps Script', () => {
     ctx.encoded = Buffer.from(text).toString('base64') + '\n';
     expect(vm.runInContext('decodeBody_(encoded)', ctx)).toBe(text);
   });
+  it.each([true, false])(
+    'lee bytes HTML UTF-8 (signed=%s) sin volver a decodificar Base64',
+    (signed) => {
+      const ctx = context();
+      const html =
+        '<h1>Depósito exitoso</h1><p>Tu cuenta de belo recibió un depósito de $990 💰</p>';
+      const bytes = [...Buffer.from(html)].map((b) =>
+        signed && b > 127 ? b - 256 : b,
+      );
+      ctx.part = { mimeType: 'text/html', body: { data: bytes } };
+      const text = vm.runInContext('plainText_(part)', ctx);
+      expect(text).toContain('recibió');
+      expect(text).toContain('💰');
+      expect(
+        parseBeloDeposit({ ...sample, text }, start, now).amountCents,
+      ).toBe(99000);
+    },
+  );
+  it.each([[-129], [256], [1.5], ['1'], [null]])(
+    'rechaza arrays que no representan bytes: %j',
+    (...values) => {
+      const ctx = context();
+      ctx.encoded = values;
+      expect(() => vm.runInContext('decodeBody_(encoded)', ctx)).toThrow();
+    },
+  );
   it.each(['a', 'abc%', 'ab=c', '%%%'])(
     'rechaza codificación inválida: %s',
     (encoded) => {

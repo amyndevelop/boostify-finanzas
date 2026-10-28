@@ -54,7 +54,7 @@ function syncBelo() {
       const signature = Utilities.computeHmacSha256Signature(timestamp + '.' + body, s.secret, Utilities.Charset.UTF_8).map(function(b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join('');
       const response = UrlFetchApp.fetch(s.url + '/api/integrations/belo', { method: 'post', contentType: 'application/json', payload: body, headers: { 'x-belo-timestamp': timestamp, 'x-belo-signature': signature }, muteHttpExceptions: true, followRedirects: false });
       const code = response.getResponseCode();
-      if (code === 200 || code === 201) { accepted++; return; }
+      if (code === 200 || code === 201) { clearFailure_(s.p, item.id); accepted++; return; }
       if (code === 422) { failure_(s.p, item.id, 'Aviso rechazado: revisar importe, moneda o fecha'); review++; return; }
       throw new Error('BOOSTIFY respondió HTTP ' + code + '. No se avanza la página; se reintentará sin duplicar.');
     });
@@ -79,8 +79,13 @@ function mimeParts_(part, mime) {
   if (part.mimeType === mime && part.body && part.body.data) return [decodeBody_(part.body.data)];
   return (part.parts || []).reduce(function(result, child) { return result.concat(mimeParts_(child, mime)); }, []);
 }
-// Gmail may omit base64 padding; Apps Script's decoder is stricter than Node's.
+// Advanced Gmail can return decoded signed byte arrays; REST returns Base64 strings.
 function decodeBody_(value) {
+  if (Array.isArray(value)) {
+    if (!value.every(function(b) { return Number.isInteger(b) && b >= -128 && b <= 255; })) throw new Error('Bytes de correo no válidos');
+    const bytes = value.map(function(b) { return b > 127 ? b - 256 : b; });
+    return Utilities.newBlob(bytes).getDataAsString('UTF-8');
+  }
   if (typeof value !== 'string') throw new Error('Cuerpo de correo no válido');
   const normalized = value.replace(/\s/g, '').replace(/\+/g, '-').replace(/\//g, '_');
   if (!/^[A-Za-z0-9_-]*={0,2}$/.test(normalized)) throw new Error('Base64 no válido');
@@ -91,8 +96,14 @@ function decodeBody_(value) {
 }
 function failure_(properties, id, reason) {
   const list = JSON.parse(properties.getProperty('BELO_REVIEW') || '[]');
-  if (!list.some(function(x) { return x.id === id; })) list.push({ id: id, reason: reason });
+  const existing = list.find(function(x) { return x.id === id; });
+  if (existing) existing.reason = reason;
+  else list.push({ id: id, reason: reason });
   properties.setProperty('BELO_REVIEW', JSON.stringify(list.slice(-50)));
+}
+function clearFailure_(properties, id) {
+  const list = JSON.parse(properties.getProperty('BELO_REVIEW') || '[]');
+  properties.setProperty('BELO_REVIEW', JSON.stringify(list.filter(function(x) { return x.id !== id; })));
 }
 function showBeloReview() {
   console.log(PropertiesService.getScriptProperties().getProperty('BELO_REVIEW') || '[]');
