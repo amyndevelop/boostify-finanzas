@@ -1335,3 +1335,235 @@ section[id] {
     font-size: 21px;
   }
 }
+.findings-card {
+  border-color: #624078;
+  background:
+    radial-gradient(ellipse at top right, #7c3aed20, transparent), #1c1c2b;
+}
+.findings-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.finding {
+  padding: 17px;
+  border: 1px solid #493552;
+  border-radius: 12px;
+  background: #14121d55;
+}
+.finding h3 {
+  font-size: 14px;
+  color: #eadcf7;
+  line-height: 1.5;
+}
+.finding p {
+  font-size: 11px;
+  color: #b7a8c4;
+  line-height: 1.8;
+  margin: 10px 0;
+}
+.finding a {
+  color: #c5a5ff;
+  font-size: 11px;
+}
+.finding-attention {
+  border-left: 3px solid #d6a85e;
+}
+.finding-positive {
+  border-left: 3px solid #50cda3;
+}
+.monthly-report {
+  max-width: 1000px;
+  margin: auto;
+}
+.report-controls {
+  display: flex;
+  gap: 18px;
+  align-items: end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 35px;
+}
+.report-heading h1 {
+  font-size: 30px;
+  margin: 15px 0;
+  letter-spacing: -1px;
+  font-weight: 600;
+}
+.report-heading > p {
+  line-height: 1.7;
+}
+.report-warning {
+  padding: 17px;
+  border: 1px solid #80623f;
+  background: #b27e2115;
+  color: #dfc49b;
+  line-height: 1.8;
+  font-size: 12px;
+  border-radius: 10px;
+  margin: 25px 0;
+}
+.report-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.report-metrics > div {
+  padding: 18px;
+  border: 1px solid #3c304c;
+  border-radius: 10px;
+}
+.report-metrics p {
+  font-size: 11px;
+  color: #b8a6ca;
+}
+.report-metrics strong {
+  display: block;
+  font-size: 24px;
+  margin-top: 12px;
+  color: #c4a2fa;
+}
+.report-section {
+  margin-top: 30px;
+  padding: 25px;
+  background: #1c1c2b;
+  border: 1px solid #3d304c;
+  border-radius: 12px;
+}
+.report-section h2 {
+  margin-bottom: 18px;
+}
+.report-chart {
+  width: 100%;
+  height: auto;
+}
+.report-finding {
+  padding: 15px 0;
+  border-bottom: 1px solid #403348;
+  break-inside: avoid;
+}
+.report-finding p {
+  font-size: 12px;
+  line-height: 1.8;
+  margin-top: 8px;
+  color: #b8a6ca;
+}
+.report-footnote {
+  margin: 25px 0;
+  font-size: 11px;
+  line-height: 1.8;
+  color: #a89ab8;
+}
+.report-section table {
+  font-size: 10px;
+}
+.report-section th,
+.report-section td {
+  padding: 10px 6px;
+}
+.report-section {
+  overflow-x: auto;
+}
+@media (max-width: 700px) {
+  .findings-list {
+    grid-template-columns: 1fr;
+  }
+  .report-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .report-metrics strong {
+    font-size: 20px;
+  }
+  .report-heading h1 {
+    font-size: 25px;
+  }
+  .report-section {
+    padding: 18px 12px;
+  }
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  .sidebar,
+  .topbar,
+  footer,
+  .skip-link,
+  .report-controls {
+    display: none !important;
+  }
+  .main-wrap {
+    margin: 0 !important;
+    width: 100% !important;
+    padding: 0 !important;
+  }
+  main#main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .monthly-report {
+    color: #17121f;
+    background: white;
+    font-size: 10pt;
+  }
+  .monthly-report .eyebrow,
+  .monthly-report .muted,
+  .monthly-report .report-footnote,
+  .monthly-report .report-finding p,
+  .monthly-report .report-metrics p {
+    color: #4a4056 !important;
+  }
+  .report-heading h1 {
+    font-size: 23pt;
+  }
+  .report-warning {
+    color: #493812;
+    background: #fff9e9;
+    border-color: #aa8c55;
+  }
+  .report-metrics > div,
+  .report-section {
+    border-color: #bdb3c6;
+    background: white;
+    break-inside: avoid;
+  }
+  .report-metrics strong {
+    color: #502087;
+  }
+  .report-section {
+    overflow: visible;
+  }
+  .report-section:has(table) {
+    break-inside: auto;
+  }
+  .report-section table {
+    width: 100%;
+    font-size: 8pt;
+    color: #17121f;
+  }
+  .report-section td {
+    border-color: #d0c7db;
+  }
+  .report-section th {
+    color: #49385c;
+  }
+  .report-section tr {
+    break-inside: avoid;
+  }
+  .report-section thead {
+    display: table-header-group;
+  }
+  .report-chart {
+    max-height: 65mm;
+  }
+  html,
+  body {
+    background: white !important;
+    color: #17121f !important;
+  }
+  * {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

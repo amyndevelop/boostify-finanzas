@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { Findings } from '@/components/findings';
+import { buildFindings } from '@/lib/findings';
 import { DeepInsights } from '@/components/deep-insights';
 import {
   comparisonBounds,
@@ -125,6 +127,7 @@ export default async function Dashboard({
     { a: nextDay(selected.dates.a, -29), b: selected.dates.b },
     compareDates,
     { a: monthStart, b: today },
+    { a: nextDay(today, -14), b: nextDay(today, -1) },
     ...(heightBounds ? [heightBounds.previous] : []),
   ].map((window) => {
     const end = fromZonedTime(nextDay(window.b) + 'T00:00:00', TZ);
@@ -156,6 +159,12 @@ export default async function Dashboard({
     insightRows,
     selected.dates,
     compareDates,
+    insightData.coverage,
+    now,
+  );
+  const findings = buildFindings(
+    deepData,
+    insightRows,
     insightData.coverage,
     now,
   );
@@ -516,6 +525,7 @@ export default async function Dashboard({
           </div>
         )}
       </section>
+      <Findings items={findings} />
       <AdvancedInsights data={insightData} />
       <DeepInsights data={deepData} params={p} />
       <section className="stats-grid">

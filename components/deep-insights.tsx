@@ -130,7 +130,7 @@ export function DeepInsights({ data, params }: { data: Data; params: Params }) {
         </details>
       </article>
       <div className="stats-grid">
-        <article className="card">
+        <article id="growth-analysis" className="card">
           <p className="eyebrow">DESCOMPOSICIÓN DEL CAMBIO</p>
           <h2 className="mt-2 mb-5">¿Más cobros o mayor importe?</h2>
           {g ? (
@@ -236,7 +236,7 @@ export function DeepInsights({ data, params }: { data: Data; params: Params }) {
         </article>
       </div>
       <div className="stats-grid">
-        <article className="card">
+        <article id="payment-quality" className="card">
           <p className="eyebrow">UN COBRO TÍPICO, SIN DISTORSIONES</p>
           <h2 className="mt-2 mb-5">Mediana e importe promedio</h2>
           <div className="record-grid compact-records">
@@ -272,7 +272,7 @@ export function DeepInsights({ data, params }: { data: Data; params: Params }) {
             centavo.
           </p>
         </article>
-        <article className="card">
+        <article id="revenue-concentration" className="card">
           <p className="eyebrow">CONCENTRACIÓN DE INGRESOS</p>
           <h2 className="mt-2 mb-5">¿Cuánto pesan los mayores cobros?</h2>
           <strong className="projection-value">

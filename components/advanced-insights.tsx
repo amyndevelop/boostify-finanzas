@@ -9,7 +9,7 @@ export function AdvancedInsights({ data }: { data: Data }) {
   const maxWeek = Math.max(1, ...data.week.map((w) => w.average));
   const months = [...new Set(data.days.map((d) => d.date.slice(0, 7)))];
   return (
-    <section id="statistics" className="advanced-insights">
+    <section className="advanced-insights">
       <div className="section-heading">
         <div>
           <p className="eyebrow">ENTENDÉ TU RITMO</p>
@@ -95,7 +95,7 @@ export function AdvancedInsights({ data }: { data: Data }) {
           registrados, no ventas identificadas.
         </p>
       </article>
-      <article className="card">
+      <article id="income-trend" className="card">
         <div className="section-heading">
           <div>
             <p className="eyebrow">TENDENCIA DE INGRESOS</p>
