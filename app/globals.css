@@ -1123,3 +1123,147 @@ section[id] {
     line-height: 1.7;
   }
 }
+.advanced-insights {
+  scroll-margin-top: 24px;
+}
+.insight-note {
+  font-size: 11px;
+  line-height: 1.8;
+  color: #b6a6c5;
+  margin: -8px 0 24px;
+  padding: 15px;
+  border-left: 2px solid #8c51e4;
+  background: #251b333f;
+}
+.calendar-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 28px;
+  max-height: 580px;
+  overflow: auto;
+  padding: 3px;
+}
+.calendar-month h3 {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+.calendar-weekday {
+  text-align: center;
+  font-size: 10px;
+  color: #aaa0ba;
+  margin-bottom: 5px;
+}
+.calendar-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  border: 1px solid #76529444;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.calendar-day:hover {
+  outline: 1px solid #c6a1ff;
+}
+.calendar-day.unobserved {
+  background: repeating-linear-gradient(
+    135deg,
+    #302a3a,
+    #302a3a 3px,
+    #211c2b 3px,
+    #211c2b 6px
+  );
+  color: #96879e;
+}
+.calendar-day span {
+  color: #ded0f0;
+}
+.weekday-list {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  font-size: 12px;
+}
+.insight-details {
+  margin-top: 22px;
+  color: #b6a6c5;
+  font-size: 11px;
+}
+.insight-details summary {
+  cursor: pointer;
+}
+.hour-table {
+  margin-top: 15px;
+  display: grid;
+  gap: 8px;
+}
+.hour-table > div {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #373044;
+  padding: 6px;
+}
+.projection-card {
+  background:
+    radial-gradient(ellipse at top right, #7138b344, transparent), #1c1c2b;
+}
+.projection-value {
+  font-size: 33px;
+  letter-spacing: -1px;
+  color: #c4a2ff;
+}
+.projection-facts {
+  display: grid;
+  gap: 12px;
+  margin: 25px 0;
+  font-size: 12px;
+}
+.projection-facts p {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.record-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.record-grid > div {
+  border-left: 2px solid #694091;
+  padding-left: 16px;
+  font-size: 12px;
+}
+.record-grid strong {
+  display: block;
+  font-size: 25px;
+  margin: 14px 0;
+  color: #c4a2ff;
+}
+.record-grid a {
+  color: #a89ab9;
+  font-size: 11px;
+}
+@media (max-width: 700px) {
+  .calendar-months {
+    grid-template-columns: 1fr;
+    max-height: 520px;
+  }
+  .record-grid {
+    grid-template-columns: 1fr;
+    gap: 25px;
+  }
+  .projection-value {
+    font-size: 29px;
+  }
+  .record-grid strong {
+    font-size: 24px;
+  }
+  .advanced-insights .chart {
+    height: 230px;
+  }
+}

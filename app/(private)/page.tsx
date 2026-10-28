@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { AdvancedInsights } from '@/components/advanced-insights';
+import { insights, coverageStart, nextDay } from '@/lib/insights';
 import { TodaySummary } from '@/components/today-summary';
 import { BeloSyncStatus } from '@/components/belo-sync-status';
 import { syncStatus } from '@/lib/sync-status';
@@ -90,6 +92,32 @@ export default async function Dashboard({
         .then((state) => ({ available: true, state }))
         .catch(() => ({ available: false, state: null })),
     ]);
+  const insightStart =
+    nextDay(selected.dates.a, -29) < monthStart
+      ? nextDay(selected.dates.a, -29)
+      : monthStart;
+  const [insightRows, firstRecorded] = await Promise.all([
+    db.transaction.findMany({
+      where: {
+        occurredAt: {
+          gte: fromZonedTime(insightStart + 'T00:00:00', TZ),
+          lt: range('month', undefined, undefined, now).end,
+        },
+      },
+      select: { type: true, amountCents: true, occurredAt: true },
+    }),
+    db.transaction.aggregate({ _min: { occurredAt: true } }),
+  ]);
+  const insightData = insights(
+    insightRows,
+    selected.dates.a,
+    selected.dates.b,
+    coverageStart(
+      process.env.BELO_IMPORT_START_AT,
+      firstRecorded._min.occurredAt,
+    ),
+    now,
+  );
   const mailStatus = syncState.available
     ? syncStatus(syncState.state)
     : {
@@ -447,7 +475,8 @@ export default async function Dashboard({
           </div>
         )}
       </section>
-      <section id="statistics" className="stats-grid">
+      <AdvancedInsights data={insightData} />
+      <section className="stats-grid">
         <article className="card">
           <div className="section-heading">
             <div>
