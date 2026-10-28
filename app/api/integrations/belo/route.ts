@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
 import { parseBeloDeposit, verifyBeloSignature } from '@/lib/belo';
+import { syncReportSchema } from '@/lib/sync-status';
 export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   const start = process.env.BELO_IMPORT_START_AT;
@@ -52,9 +53,43 @@ export async function POST(request: NextRequest) {
     )
   )
     return Response.json({ error: 'Firma inválida' }, { status: 401 });
+  let input: unknown;
+  try {
+    input = JSON.parse(body);
+  } catch {
+    return Response.json({ error: 'Mensaje inválido' }, { status: 422 });
+  }
+  if (
+    input &&
+    typeof input === 'object' &&
+    'kind' in input &&
+    input.kind === 'sync'
+  ) {
+    const report = syncReportSchema.safeParse(input);
+    if (!report.success)
+      return Response.json({ error: 'Reporte inválido' }, { status: 422 });
+    try {
+      const data = {
+        lastCheckedAt: new Date(),
+        complete: report.data.complete,
+        pendingReviewCount: report.data.pendingReviewCount,
+      };
+      await db.integrationSyncState.upsert({
+        where: { id: 'belo' },
+        create: { id: 'belo', ...data },
+        update: data,
+      });
+      return Response.json({ status: 'sync-recorded' });
+    } catch {
+      return Response.json(
+        { error: 'No se pudo guardar la revisión' },
+        { status: 503 },
+      );
+    }
+  }
   let deposit: ReturnType<typeof parseBeloDeposit>;
   try {
-    deposit = parseBeloDeposit(JSON.parse(body), startAt);
+    deposit = parseBeloDeposit(input, startAt);
   } catch {
     return Response.json(
       { error: 'Aviso no reconocido; revisar manualmente' },

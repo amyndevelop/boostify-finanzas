@@ -31,6 +31,10 @@ const child = spawn(
   },
 );
 const transactionIds: string[] = [];
+let previousSync: Awaited<
+  ReturnType<typeof db.integrationSyncState.findUnique>
+> = null;
+let syncTouched = false;
 const base = 'http://127.0.0.1:3102';
 async function post(payload: unknown, signed = true) {
   const body = JSON.stringify(payload);
@@ -63,6 +67,32 @@ try {
     await new Promise((r) => setTimeout(r, 250));
   }
   assert(ready, 'Servidor de pruebas no disponible');
+  previousSync = await db.integrationSyncState.findUnique({
+    where: { id: 'belo' },
+  });
+  const countBefore = await db.transaction.count();
+  const report = { kind: 'sync', complete: true, pendingReviewCount: 0 };
+  assert.equal((await post(report, false)).status, 401);
+  assert.equal((await post({ ...report, pendingReviewCount: -1 })).status, 422);
+  syncTouched = true;
+  const checkStarted = Date.now();
+  assert.equal((await post(report)).status, 200);
+  const sync = await db.integrationSyncState.findUniqueOrThrow({
+    where: { id: 'belo' },
+  });
+  assert(sync.lastCheckedAt.getTime() >= checkStarted);
+  assert.equal(sync.complete, true);
+  assert.equal(sync.pendingReviewCount, 0);
+  assert.equal(await db.transaction.count(), countBefore);
+  assert.equal(
+    (await post({ ...report, complete: false, pendingReviewCount: 2 })).status,
+    200,
+  );
+  assert.equal(
+    (await db.integrationSyncState.findUniqueOrThrow({ where: { id: 'belo' } }))
+      .complete,
+    false,
+  );
   const payload = {
     gmailMessageId: suffix,
     messageId,
@@ -118,11 +148,20 @@ try {
     0,
   );
   console.log(
-    'PASS: endpoint firmado, rechazo 401/413/422, concurrencia sin duplicados, edición conservada y eliminación sin reimportación.',
+    'PASS: fecha de revisión persistida incluso sin cobros, reporte protegido, endpoint firmado, rechazo 401/413/422, concurrencia sin duplicados, edición conservada y eliminación sin reimportación.',
   );
 } finally {
   child.kill('SIGTERM');
   await db.beloImport.deleteMany({ where: { id: importId } });
   await db.transaction.deleteMany({ where: { id: { in: transactionIds } } });
+  if (syncTouched) {
+    if (previousSync)
+      await db.integrationSyncState.upsert({
+        where: { id: 'belo' },
+        create: previousSync,
+        update: previousSync,
+      });
+    else await db.integrationSyncState.deleteMany({ where: { id: 'belo' } });
+  }
   await db.$disconnect();
 }

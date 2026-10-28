@@ -40,3 +40,10 @@ model MonthlyGoal {
  amountCents Int
  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 }
+
+model IntegrationSyncState {
+ id String @id
+ lastCheckedAt DateTime @db.Timestamptz(3)
+ complete Boolean
+ pendingReviewCount Int
+}

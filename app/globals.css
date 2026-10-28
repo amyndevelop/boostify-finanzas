@@ -1048,3 +1048,36 @@ section[id] {
     font-size: 23px;
   }
 }
+.belo-sync-status {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 15px 18px;
+  margin: 0 0 22px;
+  background: #171522;
+  border: 1px solid #352b44;
+  border-radius: 12px;
+  color: #b49ace;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.belo-sync-status strong {
+  color: #e4d7f7;
+  font-weight: 500;
+}
+.belo-sync-status p:last-child {
+  font-size: 10px;
+  margin-top: 4px;
+}
+.belo-sync-status .warning {
+  color: #e9bd77;
+}
+@media (max-width: 700px) {
+  .belo-sync-status {
+    padding: 12px;
+    font-size: 11px;
+  }
+  .belo-sync-status strong {
+    display: block;
+  }
+}

@@ -45,3 +45,9 @@ Para pausar, ejecutar `stopBelo` o poner `BELO_IMPORT_ENABLED=false` en Vercel y
 ## Pruebas de desarrollo
 
 `npm test` cubre parser, firmas HMAC, origen DMARC, reintentos y avisos ambiguos. `npm run test:belo-integration` requiere un build previo y `TEST_DATABASE_URL` con una base exclusiva de pruebas migrada. Arranca el build en 127.0.0.1:3102 y verifica solicitudes firmadas contra PostgreSQL, carreras sin duplicados, edición preservada y borrado sin reimportar. Limpia únicamente los registros creados por esa ejecución. Nunca toma DATABASE_URL como fallback ni configura Gmail o producción.
+
+## Hora de última revisión
+
+El agente reporta cada página revisada mediante el mismo endpoint HMAC, incluso si Gmail devuelve cero correos. PostgreSQL guarda la hora de recepción del reporte en UTC; el panel la muestra con segundos, formato 24 horas y zona America/Argentina/Cordoba. Distingue recorrido completo, páginas pendientes y avisos para revisión; si pasan más de quince minutos sin reportes, lo señala sin afirmar una causa. El panel consulta cambios cada minuto mientras está visible. No se confunde última revisión con fecha del último depósito.
+
+Requiere aplicar la migración `20261028030000_belo_sync_status` y reemplazar Código.gs con su nueva versión. Las propiedades, claves y disparadores existentes se conservan. Si falla un envío de cobro o el reporte, no se avanza el cursor; los reintentos no duplican depósitos. Una versión vieja del agente puede seguir importando cobros, pero no reportará la fecha: se muestra sin registro hasta recibir el primer reporte válido. Los reportes no crean movimientos financieros ni contienen el correo.

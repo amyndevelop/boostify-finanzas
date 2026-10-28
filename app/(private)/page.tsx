@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { BeloSyncStatus } from '@/components/belo-sync-status';
+import { syncStatus } from '@/lib/sync-status';
 import { db } from '@/lib/db';
 import {
   previousRange,
@@ -54,32 +56,44 @@ export default async function Dashboard({
     .toISOString()
     .slice(0, 10);
   const previousDates = previousRange(p.period, selected.dates);
-  const [rows, monthly, previousRows, goalResult] = await Promise.all([
-    db.transaction.findMany({
-      where: selected.where,
-      orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
-    }),
-    db.transaction.findMany({
-      where: {
-        occurredAt: {
-          gte: fromZonedTime(sixMonths + 'T00:00:00', TZ),
-          lt: range('month').end,
+  const [rows, monthly, previousRows, goalResult, syncState] =
+    await Promise.all([
+      db.transaction.findMany({
+        where: selected.where,
+        orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+      }),
+      db.transaction.findMany({
+        where: {
+          occurredAt: {
+            gte: fromZonedTime(sixMonths + 'T00:00:00', TZ),
+            lt: range('month').end,
+          },
         },
-      },
-      select: { type: true, amountCents: true, occurredAt: true },
-    }),
-    db.transaction.findMany({
-      where: {
-        ...selected.where,
-        occurredAt: { gte: previousDates.start, lt: previousDates.end },
-      },
-      select: { type: true, amountCents: true },
-    }),
-    db.monthlyGoal
-      .findUnique({ where: { month: today.slice(0, 7) } })
-      .then((goal) => ({ available: true, goal }))
-      .catch(() => ({ available: false, goal: null })),
-  ]);
+        select: { type: true, amountCents: true, occurredAt: true },
+      }),
+      db.transaction.findMany({
+        where: {
+          ...selected.where,
+          occurredAt: { gte: previousDates.start, lt: previousDates.end },
+        },
+        select: { type: true, amountCents: true },
+      }),
+      db.monthlyGoal
+        .findUnique({ where: { month: today.slice(0, 7) } })
+        .then((goal) => ({ available: true, goal }))
+        .catch(() => ({ available: false, goal: null })),
+      db.integrationSyncState
+        .findUnique({ where: { id: 'belo' } })
+        .then((state) => ({ available: true, state }))
+        .catch(() => ({ available: false, state: null })),
+    ]);
+  const mailStatus = syncState.available
+    ? syncStatus(syncState.state)
+    : {
+        time: null,
+        label: 'Estado de sincronización no disponible',
+        tone: 'muted',
+      };
   const summary = totals(rows);
   const prior = totals(previousRows);
   const payments = paymentStats(rows),
@@ -155,6 +169,7 @@ export default async function Dashboard({
         </div>
         <MovementDialog today={today} />
       </section>
+      <BeloSyncStatus {...mailStatus} />
       <div className="period-bar">
         <div>
           <span className="live-dot" />{' '}

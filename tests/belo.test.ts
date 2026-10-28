@@ -179,6 +179,8 @@ describe('agente Gmail de solo lectura', () => {
     auth = 'mx.google.com; dmarc=pass header.from=belo.app;',
     text = sample.text,
     encoded?: string | number[],
+    empty = false,
+    reportCode = 200,
   ) {
     const store: Record<string, string> = {
       BOOSTIFY_URL: 'https://boostify.test',
@@ -187,6 +189,7 @@ describe('agente Gmail de solo lectura', () => {
       BELO_IMPORT_CURRENCY: 'ARS',
     };
     const posted: string[] = [];
+    const reports: string[] = [];
     const props = {
       getProperty: (k: string) => store[k] ?? null,
       setProperty: (k: string, v: string) => {
@@ -205,7 +208,9 @@ describe('agente Gmail de solo lectura', () => {
       Gmail: {
         Users: {
           Messages: {
-            list: () => ({ messages: [{ id: sample.gmailMessageId }] }),
+            list: () => ({
+              messages: empty ? [] : [{ id: sample.gmailMessageId }],
+            }),
             get: () => ({
               internalDate: String(Date.parse(sample.receivedAt)),
               payload: {
@@ -236,6 +241,10 @@ describe('agente Gmail de solo lectura', () => {
       },
       UrlFetchApp: {
         fetch: (_url: string, options: { payload: string }) => {
+          if (JSON.parse(options.payload).kind === 'sync') {
+            reports.push(options.payload);
+            return { getResponseCode: () => reportCode };
+          }
           posted.push(options.payload);
           return { getResponseCode: () => code };
         },
@@ -245,6 +254,7 @@ describe('agente Gmail de solo lectura', () => {
     return {
       store,
       posted,
+      reports,
       sync: () => vm.runInContext('syncBelo()', context),
     };
   }
@@ -279,6 +289,34 @@ describe('agente Gmail de solo lectura', () => {
     r.sync();
     expect(r.store.BELO_REVIEW).not.toContain('Error antiguo');
     expect(r.store.BELO_REVIEW).toContain('Aviso rechazado');
+  });
+  it('reporta incluso cuando Gmail no devuelve ningún correo', () => {
+    const r = run(201, undefined, undefined, undefined, true);
+    r.sync();
+    expect(r.posted).toHaveLength(0);
+    expect(r.reports).toHaveLength(1);
+    expect(r.store.BELO_CURSOR).toBeDefined();
+  });
+  it('no avanza el cursor si falla el envío de la hora de revisión', () => {
+    const r = run(201, undefined, undefined, undefined, true, 503);
+    expect(r.sync).toThrow();
+    expect(r.store.BELO_CURSOR).toBeUndefined();
+  });
+  it('reporta una revisión aunque no haya cobros nuevos', () => {
+    const r = run(201, undefined, 'Retiro exitoso');
+    r.sync();
+    expect(r.posted).toHaveLength(0);
+    expect(r.reports).toHaveLength(1);
+    expect(JSON.parse(r.reports[0])).toEqual({
+      kind: 'sync',
+      complete: true,
+      pendingReviewCount: 0,
+    });
+  });
+  it('no reporta como completada una sincronización fallida', () => {
+    const r = run(503);
+    expect(r.sync).toThrow();
+    expect(r.reports).toHaveLength(0);
   });
   it('publica solo depósitos autenticados y avanza cursor al completarse', () => {
     const r = run(201);

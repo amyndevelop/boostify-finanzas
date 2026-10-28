@@ -58,6 +58,7 @@ function syncBelo() {
       if (code === 422) { failure_(s.p, item.id, 'Aviso rechazado: revisar importe, moneda o fecha'); review++; return; }
       throw new Error('BOOSTIFY respondió HTTP ' + code + '. No se avanza la página; se reintentará sin duplicar.');
     });
+    reportBeloSync_(s, !page.nextPageToken);
     if (page.nextPageToken) { scan.pageToken = page.nextPageToken; s.p.setProperty('BELO_SCAN', JSON.stringify(scan)); }
     else { s.p.setProperty('BELO_CURSOR', String(scan.before)); s.p.deleteProperty('BELO_SCAN'); }
     console.log('Aceptados o ya importados: ' + accepted + '. Ignorados: ' + ignored + '. Para revisar: ' + review + '. Otra página: ' + Boolean(page.nextPageToken));
@@ -142,4 +143,14 @@ function diagnoseBelo() {
     visit(message.payload);
     console.log(JSON.stringify({ bodyFormats: report }));
   });
+}
+
+// Reports successful mailbox checks even when no deposit emails were found.
+function reportBeloSync_(settings, complete) {
+  const pending = JSON.parse(settings.p.getProperty('BELO_REVIEW') || '[]').length;
+  const body = JSON.stringify({ kind: 'sync', complete: complete, pendingReviewCount: pending });
+  const timestamp = String(Date.now());
+  const signature = Utilities.computeHmacSha256Signature(timestamp + '.' + body, settings.secret, Utilities.Charset.UTF_8).map(function(b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join('');
+  const response = UrlFetchApp.fetch(settings.url + '/api/integrations/belo', { method: 'post', contentType: 'application/json', payload: body, headers: { 'x-belo-timestamp': timestamp, 'x-belo-signature': signature }, muteHttpExceptions: true, followRedirects: false });
+  if (response.getResponseCode() !== 200) throw new Error('No se pudo registrar la hora de revisión (HTTP ' + response.getResponseCode() + '). Se reintentará sin duplicar cobros.');
 }
