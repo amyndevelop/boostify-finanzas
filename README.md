@@ -81,3 +81,7 @@ La cantidad de cobros cuenta movimientos de ingreso, no pedidos ni clientes. El 
 La meta de ganancia se define desde el panel para el mes actual y se guarda en PostgreSQL, sin valor predeterminado ni cambios en los ingresos. Muestra ganancia neta, avance, faltante y ganancia diaria necesaria, incluyendo hoy entre los días restantes. Contempla pérdidas y metas superadas. Usa todos los movimientos del mes actual hasta hoy, independientemente de los filtros. Cada mes conserva su propia meta; no se renueva automáticamente.
 
 Antes de habilitar metas en producción, aplicar `npm run db:migrate` a Neon con conexión directa. La migración crea solamente `MonthlyGoal`, sin modificar movimientos ni importaciones Belo. Mientras esa tabla no exista, la meta indica indisponibilidad y los demás indicadores continúan funcionando. No se ejecutan migraciones durante el build ni se inventa una meta.
+
+### Resumen de hoy
+
+El bloque «Hoy en BOOSTIFY» muestra ingresos, gastos, ganancia, margen, cantidad de cobros y cobro promedio del día actual en Argentina. Usa desde las 00:00 locales hasta las 00:00 del día siguiente (fin exclusivo), con todos los tipos y categorías. Sigue visible al consultar otros períodos o filtros. Se actualiza con la consulta periódica del panel cada minuto mientras está visible; los correos nuevos dependen además de la revisión programada de Gmail. No necesita nuevas variables ni migraciones.

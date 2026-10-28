@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { TodaySummary } from '@/components/today-summary';
 import { BeloSyncStatus } from '@/components/belo-sync-status';
 import { syncStatus } from '@/lib/sync-status';
 import { db } from '@/lib/db';
@@ -7,6 +8,7 @@ import {
   paymentStats,
   variation,
   goalProgress,
+  todayStats,
 } from '@/lib/statistics';
 import { MonthlyGoal } from '@/components/monthly-goal';
 import { requireAdmin } from '@/lib/auth';
@@ -50,7 +52,8 @@ export default async function Dashboard({
       </section>
     );
   }
-  const today = day(new Date());
+  const now = new Date();
+  const today = day(now);
   const monthStart = today.slice(0, 7) + '-01';
   const sixMonths = subMonths(new Date(monthStart + 'T12:00:00Z'), 5)
     .toISOString()
@@ -66,7 +69,7 @@ export default async function Dashboard({
         where: {
           occurredAt: {
             gte: fromZonedTime(sixMonths + 'T00:00:00', TZ),
-            lt: range('month').end,
+            lt: range('month', undefined, undefined, now).end,
           },
         },
         select: { type: true, amountCents: true, occurredAt: true },
@@ -94,6 +97,7 @@ export default async function Dashboard({
         label: 'Estado de sincronización no disponible',
         tone: 'muted',
       };
+  const todaySummary = todayStats(monthly, now);
   const summary = totals(rows);
   const prior = totals(previousRows);
   const payments = paymentStats(rows),
@@ -170,6 +174,7 @@ export default async function Dashboard({
         <MovementDialog today={today} />
       </section>
       <BeloSyncStatus {...mailStatus} />
+      <TodaySummary stats={todaySummary} />
       <div className="period-bar">
         <div>
           <span className="live-dot" />{' '}

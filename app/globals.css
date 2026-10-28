@@ -1081,3 +1081,45 @@ section[id] {
     display: block;
   }
 }
+.today-summary {
+  border-color: #584071;
+  background:
+    radial-gradient(ellipse at top left, #7c3aed24, transparent 65%), #1c1c2b;
+}
+.today-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px 24px;
+}
+.today-grid > div {
+  border-top: 1px solid #3e334d;
+  padding-top: 15px;
+  min-width: 0;
+}
+.today-grid dt {
+  font-size: 11px;
+  color: #b8aec8;
+}
+.today-grid dd {
+  font-size: clamp(21px, 2vw, 29px);
+  font-weight: 600;
+  letter-spacing: -0.7px;
+  margin-top: 9px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .today-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 14px;
+  }
+  .today-grid dd {
+    font-size: 23px;
+  }
+  .today-summary .section-heading {
+    margin-bottom: 20px;
+  }
+  .today-summary .muted {
+    line-height: 1.7;
+  }
+}

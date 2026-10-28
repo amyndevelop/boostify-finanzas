@@ -52,3 +52,14 @@ export function goalProgress(target: number, profit: number, now = new Date()) {
     percent: target > 0 ? Math.max(0, (profit / target) * 100) : 0,
   };
 }
+
+export function todayStats(
+  rows: { type: string; amountCents: number; occurredAt: Date }[],
+  now = new Date(),
+) {
+  const dates = range('today', undefined, undefined, now);
+  const todayRows = rows.filter(
+    (row) => row.occurredAt >= dates.start && row.occurredAt < dates.end,
+  );
+  return { date: dates.a, ...totals(todayRows), ...paymentStats(todayRows) };
+}
