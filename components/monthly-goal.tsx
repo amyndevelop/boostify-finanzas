@@ -33,7 +33,7 @@ export function MonthlyGoal({
     {},
   );
   return (
-    <section className="card goal-card">
+    <section id="monthly-goal" className="card goal-card">
       <div className="section-heading">
         <div>
           <p className="eyebrow">

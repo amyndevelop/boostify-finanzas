@@ -1567,3 +1567,61 @@ section[id] {
     -webkit-print-color-adjust: exact;
   }
 }
+.daily-goal {
+  background:
+    radial-gradient(ellipse at top right, #7c3aed35, transparent 70%), #1c1c2b;
+  border-color: #7546a1;
+}
+.daily-goal-head {
+  display: flex;
+  align-items: center;
+  gap: 35px;
+  flex-wrap: wrap;
+}
+.daily-goal-head strong {
+  display: block;
+  font-size: 29px;
+  letter-spacing: -1px;
+  margin-top: 9px;
+}
+.daily-goal-head .goal-percent {
+  margin-left: auto;
+}
+.daily-goal-track {
+  height: 17px;
+  margin: 24px 0;
+}
+.daily-goal-message {
+  font-size: 13px;
+  line-height: 1.8;
+}
+.daily-goal-message h3 {
+  font-size: 17px;
+}
+.daily-goal .insight-details p {
+  font-size: 11px;
+  line-height: 1.8;
+}
+.daily-goal-complete {
+  border-color: #34765f;
+}
+.daily-goal-complete .daily-goal-track span {
+  background: linear-gradient(90deg, #2fa878, #65e8b3);
+}
+@media (max-width: 700px) {
+  .daily-goal-head {
+    gap: 20px;
+  }
+  .daily-goal-head strong {
+    font-size: 24px;
+  }
+  .daily-goal-head .goal-percent {
+    font-size: 24px;
+  }
+  .daily-goal-message h3 {
+    font-size: 15px;
+  }
+  .daily-goal-track {
+    height: 15px;
+  }
+}

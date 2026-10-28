@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { DailyGoal } from '@/components/daily-goal';
 import { Findings } from '@/components/findings';
 import { buildFindings } from '@/lib/findings';
 import { DeepInsights } from '@/components/deep-insights';
@@ -19,6 +20,7 @@ import {
   variation,
   goalProgress,
   todayStats,
+  dailyGoalProgress,
 } from '@/lib/statistics';
 import { MonthlyGoal } from '@/components/monthly-goal';
 import { requireAdmin } from '@/lib/auth';
@@ -180,14 +182,26 @@ export default async function Dashboard({
   const prior = totals(previousRows);
   const payments = paymentStats(rows),
     priorPayments = paymentStats(previousRows);
-  const currentMonthProfit = totals(
-    monthly.filter((r) => day(r.occurredAt).startsWith(today.slice(0, 7))),
-  ).profit;
+  const currentMonthRows = monthly.filter((r) =>
+    day(r.occurredAt).startsWith(today.slice(0, 7)),
+  );
+  const currentMonthTotals = totals(currentMonthRows);
+  const currentMonthProfit = currentMonthTotals.profit;
   const goal = goalResult.goal;
   const goalState = goal
     ? goalProgress(goal.amountCents, currentMonthProfit)
     : null;
 
+  const dailyGoal = goal
+    ? dailyGoalProgress(
+        goal.amountCents,
+        currentMonthTotals.income,
+        currentMonthTotals.expense,
+        paymentStats(currentMonthRows).count,
+        todaySummary,
+        now,
+      )
+    : null;
   const daily = new Map<
     string,
     { date: string; income: number; expense: number; profit: number }
@@ -253,6 +267,11 @@ export default async function Dashboard({
       </section>
       <BeloSyncStatus {...mailStatus} />
       <TodaySummary stats={todaySummary} />
+      <DailyGoal
+        progress={dailyGoal}
+        available={goalResult.available}
+        date={today}
+      />
       <div className="period-bar">
         <div>
           <span className="live-dot" />{' '}

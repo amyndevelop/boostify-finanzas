@@ -63,3 +63,51 @@ export function todayStats(
   );
   return { date: dates.a, ...totals(todayRows), ...paymentStats(todayRows) };
 }
+
+export function dailyGoalProgress(
+  target: number,
+  monthIncome: number,
+  monthExpense: number,
+  monthPaymentCount: number,
+  today: { income: number; expense: number },
+  now = new Date(),
+) {
+  const profitToday = today.income - today.expense;
+  const profitBeforeToday = monthIncome - monthExpense - profitToday;
+  const remainingDays = goalProgress(
+    target,
+    profitBeforeToday,
+    now,
+  ).remainingDays;
+  const dailyTargetCents = Math.ceil(
+    Math.max(0, target - profitBeforeToday) / remainingDays,
+  );
+  const remainingCents = Math.max(0, dailyTargetCents - profitToday);
+  const percent =
+    dailyTargetCents > 0
+      ? Math.max(0, (profitToday / dailyTargetCents) * 100)
+      : profitToday >= 0
+        ? 100
+        : 0;
+  const averageCents =
+    monthPaymentCount > 0 && monthIncome > 0
+      ? Math.round(monthIncome / monthPaymentCount)
+      : null;
+  const additionalPayments =
+    remainingCents === 0
+      ? 0
+      : monthPaymentCount > 0 && monthIncome > 0
+        ? Math.ceil(remainingCents / (monthIncome / monthPaymentCount))
+        : null;
+  return {
+    dailyTargetCents,
+    profitToday,
+    profitBeforeToday,
+    remainingDays,
+    remainingCents,
+    percent,
+    averageCents,
+    additionalPayments,
+    achieved: remainingCents === 0,
+  };
+}
