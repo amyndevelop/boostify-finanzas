@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
+import { requireAdmin } from '@/lib/auth';
 import { day, money, totals, range } from '@/lib/finance';
 import { filters, Params } from '@/lib/query';
 import { MovementDialog, DeleteDialog } from '@/components/movement-dialog';
@@ -22,6 +23,7 @@ export default async function Dashboard({
 }: {
   searchParams: Promise<Params>;
 }) {
+  await requireAdmin();
   const p = await searchParams;
   let selected: ReturnType<typeof filters>;
   try {
