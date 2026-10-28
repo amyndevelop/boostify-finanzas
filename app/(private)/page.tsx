@@ -1,5 +1,12 @@
 import Link from 'next/link';
 import { db } from '@/lib/db';
+import {
+  previousRange,
+  paymentStats,
+  variation,
+  goalProgress,
+} from '@/lib/statistics';
+import { MonthlyGoal } from '@/components/monthly-goal';
 import { requireAdmin } from '@/lib/auth';
 import { day, money, totals, range } from '@/lib/finance';
 import { filters, Params } from '@/lib/query';
@@ -46,7 +53,8 @@ export default async function Dashboard({
   const sixMonths = subMonths(new Date(monthStart + 'T12:00:00Z'), 5)
     .toISOString()
     .slice(0, 10);
-  const [rows, monthly] = await Promise.all([
+  const previousDates = previousRange(p.period, selected.dates);
+  const [rows, monthly, previousRows, goalResult] = await Promise.all([
     db.transaction.findMany({
       where: selected.where,
       orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
@@ -60,8 +68,30 @@ export default async function Dashboard({
       },
       select: { type: true, amountCents: true, occurredAt: true },
     }),
+    db.transaction.findMany({
+      where: {
+        ...selected.where,
+        occurredAt: { gte: previousDates.start, lt: previousDates.end },
+      },
+      select: { type: true, amountCents: true },
+    }),
+    db.monthlyGoal
+      .findUnique({ where: { month: today.slice(0, 7) } })
+      .then((goal) => ({ available: true, goal }))
+      .catch(() => ({ available: false, goal: null })),
   ]);
   const summary = totals(rows);
+  const prior = totals(previousRows);
+  const payments = paymentStats(rows),
+    priorPayments = paymentStats(previousRows);
+  const currentMonthProfit = totals(
+    monthly.filter((r) => day(r.occurredAt).startsWith(today.slice(0, 7))),
+  ).profit;
+  const goal = goalResult.goal;
+  const goalState = goal
+    ? goalProgress(goal.amountCents, currentMonthProfit)
+    : null;
+
   const daily = new Map<
     string,
     { date: string; income: number; expense: number; profit: number }
@@ -140,6 +170,7 @@ export default async function Dashboard({
             title: 'Ingresos cobrados',
             value: money(summary.income),
             note: 'Dinero que entró al negocio',
+            change: variation(summary.income, prior.income),
             icon: ArrowDownLeft,
             color: 'green',
           },
@@ -147,6 +178,7 @@ export default async function Dashboard({
             title: 'Gastos del período',
             value: money(summary.expense),
             note: 'Tu inversión en movimiento',
+            change: variation(summary.expense, prior.expense),
             icon: ArrowUpRight,
             color: 'red',
           },
@@ -154,6 +186,7 @@ export default async function Dashboard({
             title: 'Ganancia neta',
             value: money(summary.profit),
             note: 'Lo que realmente queda',
+            change: variation(summary.profit, prior.profit),
             icon: Wallet,
             color: 'purple',
           },
@@ -168,6 +201,7 @@ export default async function Dashboard({
               : 'Sin ingresos en este período',
             icon: Percent,
             color: 'neutral',
+            change: null,
           },
         ].map((m) => (
           <article key={m.title} className={'metric ' + m.color}>
@@ -179,9 +213,59 @@ export default async function Dashboard({
             </div>
             <strong>{m.value}</strong>
             <p>{m.note}</p>
+            {m.change ? (
+              <p className="metric-comparison">
+                {m.change.delta >= 0 ? '+' : '−'}
+                {money(Math.abs(m.change.delta))}
+                {m.change.percent !== null
+                  ? ` (${m.change.percent >= 0 ? '+' : ''}${m.change.percent.toLocaleString('es-AR', { maximumFractionDigits: 1 })}%)`
+                  : ' · sin base positiva para %'}
+              </p>
+            ) : (
+              <p className="metric-comparison">
+                {(summary.margin - prior.margin).toLocaleString('es-AR', {
+                  maximumFractionDigits: 1,
+                  signDisplay: 'always',
+                })}{' '}
+                puntos porcentuales
+              </p>
+            )}
           </article>
         ))}
       </section>
+      <p className="comparison-context">
+        Comparación con {previousDates.a.split('-').reverse().join('/')} —{' '}
+        {previousDates.b.split('-').reverse().join('/')} · mismos filtros. El
+        mes actual se compara hasta el día equivalente del mes anterior.
+      </p>
+      <section className="payment-metrics" aria-label="Estadísticas de cobros">
+        <article className="card">
+          <p className="eyebrow">CANTIDAD DE COBROS</p>
+          <strong>{payments.count.toLocaleString('es-AR')}</strong>
+          <p className="muted">
+            {priorPayments.count.toLocaleString('es-AR')} en el período anterior
+            · {payments.count - priorPayments.count >= 0 ? '+' : ''}
+            {payments.count - priorPayments.count}
+          </p>
+        </article>
+        <article className="card">
+          <p className="eyebrow">COBRO PROMEDIO</p>
+          <strong>{money(payments.averageCents)}</strong>
+          <p className="muted">
+            Antes: {money(priorPayments.averageCents)} ·{' '}
+            {payments.count
+              ? 'promedio por movimiento de ingreso'
+              : 'sin cobros en el período'}
+          </p>
+        </article>
+      </section>
+      <MonthlyGoal
+        month={today.slice(0, 7)}
+        target={goal?.amountCents ?? null}
+        profit={currentMonthProfit}
+        progress={goalState}
+        available={goalResult.available}
+      />
       <section className="card evolution">
         <div className="section-heading">
           <div>

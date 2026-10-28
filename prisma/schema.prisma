@@ -34,3 +34,9 @@ model BeloImport {
  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
  importedAt DateTime @default(now()) @db.Timestamptz(3)
 }
+
+model MonthlyGoal {
+ month String @id
+ amountCents Int
+ updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}

@@ -113,3 +113,29 @@ export async function deleteTransaction(
   revalidatePath('/');
   return {};
 }
+
+export async function saveMonthlyGoal(
+  _: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  await requireAdmin();
+  const { goalSchema } = await import('@/lib/statistics');
+  const parsed = goalSchema.safeParse(Object.fromEntries(form));
+  if (!parsed.success)
+    return {
+      error: 'Ingresá una meta positiva en ARS, con hasta dos decimales.',
+    };
+  try {
+    await db.monthlyGoal.upsert({
+      where: { month: parsed.data.month },
+      create: { month: parsed.data.month, amountCents: parsed.data.amount },
+      update: { amountCents: parsed.data.amount },
+    });
+  } catch {
+    return {
+      error: 'No se pudo guardar la meta. Intentá nuevamente más tarde.',
+    };
+  }
+  revalidatePath('/');
+  return {};
+}

@@ -71,3 +71,13 @@ La instalación requiere `registry.npmjs.org` y `binaries.prisma.sh` (motor de m
 ## Automatización de cobros Belo (opcional)
 
 El receptor firmado y el agente Gmail están en [integrations/belo-gmail](integrations/belo-gmail/README.md). La integración está desactivada por defecto y requiere la migración adicional, configuración en Vercel, y autorización del titular en Google Apps Script. Importa depósitos ARS desde la activación, categoría Otros, con prevención de duplicados. El código y las pruebas locales no establecen una conexión real a la cuenta de Gmail: la primera recepción de producción debe verificarse al activarla.
+
+## Estadísticas y metas mensuales
+
+El resumen compara los mismos filtros de tipo y categoría con el período anterior. Mes actual: del primero al día equivalente del mes anterior (limitado al último día si ese mes es más corto). Mes anterior: dos meses completos. Hoy, semana y rango personalizado: intervalo inmediatamente anterior de igual duración. Las fechas comparadas se muestran en pantalla. Los porcentajes de variación requieren base positiva; si no existe, se muestra el cambio absoluto sin inventar porcentajes. El margen se compara en puntos porcentuales.
+
+La cantidad de cobros cuenta movimientos de ingreso, no pedidos ni clientes. El cobro promedio es la suma en centavos dividida por esa cantidad, redondeada al centavo. Respeta los filtros elegidos.
+
+La meta de ganancia se define desde el panel para el mes actual y se guarda en PostgreSQL, sin valor predeterminado ni cambios en los ingresos. Muestra ganancia neta, avance, faltante y ganancia diaria necesaria, incluyendo hoy entre los días restantes. Contempla pérdidas y metas superadas. Usa todos los movimientos del mes actual hasta hoy, independientemente de los filtros. Cada mes conserva su propia meta; no se renueva automáticamente.
+
+Antes de habilitar metas en producción, aplicar `npm run db:migrate` a Neon con conexión directa. La migración crea solamente `MonthlyGoal`, sin modificar movimientos ni importaciones Belo. Mientras esa tabla no exista, la meta indica indisponibilidad y los demás indicadores continúan funcionando. No se ejecutan migraciones durante el build ni se inventa una meta.
