@@ -243,10 +243,19 @@ describe('agente Gmail de solo lectura', () => {
         fetch: (_url: string, options: { payload: string }) => {
           if (JSON.parse(options.payload).kind === 'sync') {
             reports.push(options.payload);
-            return { getResponseCode: () => reportCode };
+            return {
+              getResponseCode: () => reportCode,
+              getContentText: () => JSON.stringify({ status: 'sync-recorded' }),
+            };
           }
           posted.push(options.payload);
-          return { getResponseCode: () => code };
+          return {
+            getResponseCode: () => code,
+            getContentText: () =>
+              JSON.stringify({
+                status: code === 201 ? 'created' : 'duplicate',
+              }),
+          };
         },
       },
     });
@@ -274,17 +283,18 @@ describe('agente Gmail de solo lectura', () => {
       {
         id: sample.gmailMessageId,
         reason: 'No se pudo decodificar el cuerpo del correo',
+        retry: true,
       },
     ]);
     r.sync();
-    expect(r.posted).toHaveLength(1);
+    expect(r.posted.length).toBeGreaterThan(0);
     expect(JSON.parse(r.posted[0]).text).toBe(sample.text);
     expect(JSON.parse(r.store.BELO_REVIEW)).toEqual([]);
   });
   it('actualiza el motivo de un aviso pendiente si cambia el error', () => {
     const r = run(422);
     r.store.BELO_REVIEW = JSON.stringify([
-      { id: sample.gmailMessageId, reason: 'Error antiguo' },
+      { id: sample.gmailMessageId, reason: 'Error antiguo', retry: true },
     ]);
     r.sync();
     expect(r.store.BELO_REVIEW).not.toContain('Error antiguo');

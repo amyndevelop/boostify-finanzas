@@ -24,7 +24,7 @@ const child = spawn(
       DATABASE_URL: connectionString,
       BELO_IMPORT_ENABLED: 'true',
       BELO_IMPORT_CURRENCY: 'ARS',
-      BELO_IMPORT_START_AT: new Date(Date.now() - 300000).toISOString(),
+      BELO_IMPORT_START_AT: new Date(Date.now() - 3 * 86400000).toISOString(),
       BELO_WEBHOOK_SECRET: secret,
     },
     stdio: 'ignore',
@@ -99,12 +99,24 @@ try {
     sender: 'transaction@belo.app',
     subject:
       'Aviso de operación - ' +
-      formatInTimeZone(new Date(), TZ, 'dd/MM/yyyy HH:mm:ss'),
+      formatInTimeZone(new Date(), TZ, 'dd/MM/yyyy H:mm:ss'),
     text: 'Depósito exitoso\nTu cuenta de belo recibió un depósito de $990',
     receivedAt: new Date().toISOString(),
     authenticated: true,
   };
   assert.equal((await post(payload, false)).status, 401);
+  const preview = await post({ kind: 'preview', message: payload });
+  assert.equal(preview.status, 200);
+  assert.equal((await preview.json()).status, 'eligible');
+  assert.equal(await db.transaction.count(), countBefore);
+  assert.equal(await db.beloImport.count({ where: { id: importId } }), 0);
+  const invalidPreview = await post({
+    kind: 'preview',
+    message: { ...payload, text: payload.text + payload.text },
+  });
+  assert.equal(invalidPreview.status, 422);
+  assert.equal((await invalidPreview.json()).reason, 'AMBIGUOUS_AMOUNT');
+  assert.equal(await db.transaction.count(), countBefore);
   assert.equal(
     (await post({ ...payload, text: 'Retiro exitoso' })).status,
     422,
@@ -123,6 +135,16 @@ try {
   transactionIds.push(receipt.transaction.id);
   assert.equal(receipt.transaction.amountCents, 99000);
   assert.equal(receipt.transaction.category, 'Otros');
+  const existingPreview = await post({ kind: 'preview', message: payload });
+  assert.equal((await existingPreview.json()).status, 'duplicate');
+  assert.equal(await db.transaction.count(), countBefore + 1);
+  // The Gmail unique constraint also prevents a second receipt with a changed Message-ID.
+  assert.equal(
+    (await post({ ...payload, messageId: '<changed-' + messageId.slice(1) }))
+      .status,
+    200,
+  );
+  assert.equal(await db.transaction.count(), countBefore + 1);
   await db.transaction.update({
     where: { id: receipt.transaction.id },
     data: { amountCents: 100000 },
@@ -143,12 +165,14 @@ try {
     null,
   );
   assert.equal((await post(payload)).status, 200);
+  const deletedPreview = await post({ kind: 'preview', message: payload });
+  assert.equal((await deletedPreview.json()).deleted, true);
   assert.equal(
     await db.transaction.count({ where: { id: receipt.transaction.id } }),
     0,
   );
   console.log(
-    'PASS: fecha de revisión persistida incluso sin cobros, reporte protegido, endpoint firmado, rechazo 401/413/422, concurrencia sin duplicados, edición conservada y eliminación sin reimportación.',
+    'PASS: vista previa sin escrituras, motivos precisos, recuperación idempotente y fecha de revisión persistida incluso sin cobros, reporte protegido, endpoint firmado, rechazo 401/413/422, concurrencia sin duplicados, edición conservada y eliminación sin reimportación.',
   );
 } finally {
   child.kill('SIGTERM');

@@ -1,7 +1,11 @@
 import { NextRequest } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { db } from '@/lib/db';
-import { parseBeloDeposit, verifyBeloSignature } from '@/lib/belo';
+import {
+  BeloValidationError,
+  parseBeloDeposit,
+  verifyBeloSignature,
+} from '@/lib/belo';
 import { syncReportSchema } from '@/lib/sync-status';
 export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
@@ -87,14 +91,59 @@ export async function POST(request: NextRequest) {
       );
     }
   }
+  const preview = Boolean(
+    input &&
+    typeof input === 'object' &&
+    'kind' in input &&
+    input.kind === 'preview',
+  );
+  if (preview) {
+    if (
+      !input ||
+      typeof input !== 'object' ||
+      !('message' in input) ||
+      Object.keys(input).length !== 2
+    )
+      return Response.json({ error: 'Vista previa inválida' }, { status: 422 });
+    input = input.message;
+  }
   let deposit: ReturnType<typeof parseBeloDeposit>;
   try {
     deposit = parseBeloDeposit(input, startAt);
-  } catch {
+  } catch (error) {
+    const reason =
+      error instanceof BeloValidationError ? error.code : 'INVALID_MESSAGE';
+    console.warn(JSON.stringify({ event: 'belo.rejected', reason, preview }));
     return Response.json(
-      { error: 'Aviso no reconocido; revisar manualmente' },
+      { error: 'Aviso no reconocido; revisar manualmente', reason },
       { status: 422 },
     );
+  }
+  if (preview) {
+    try {
+      const existing = await db.beloImport.findFirst({
+        where: {
+          OR: [
+            { id: deposit.importId },
+            { gmailMessageId: deposit.gmailMessageId },
+          ],
+        },
+        select: { id: true, transactionId: true },
+      });
+      return Response.json({
+        status: existing ? 'duplicate' : 'eligible',
+        importId: deposit.importId,
+        amountCents: deposit.amountCents,
+        occurredAt: deposit.occurredAt.toISOString(),
+        deleted: Boolean(existing && !existing.transactionId),
+      });
+    } catch {
+      console.error(JSON.stringify({ event: 'belo.preview_unavailable' }));
+      return Response.json(
+        { error: 'No se pudo comprobar el ingreso' },
+        { status: 503 },
+      );
+    }
   }
   try {
     await db.beloImport.create({
@@ -112,13 +161,37 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+    console.info(
+      JSON.stringify({
+        event: 'belo.created',
+        receipt: deposit.importId.slice(0, 12),
+      }),
+    );
     return Response.json({ status: 'created' }, { status: 201 });
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
-    )
-      return Response.json({ status: 'duplicate' });
+    ) {
+      const existing = await db.beloImport
+        .findFirst({
+          where: {
+            OR: [
+              { id: deposit.importId },
+              { gmailMessageId: deposit.gmailMessageId },
+            ],
+          },
+          select: { id: true },
+        })
+        .catch(() => null);
+      if (existing) return Response.json({ status: 'duplicate' });
+    }
+    console.error(
+      JSON.stringify({
+        event: 'belo.import_unavailable',
+        receipt: deposit.importId.slice(0, 12),
+      }),
+    );
     return Response.json(
       { error: 'No se pudo importar; reintentar' },
       { status: 503 },
